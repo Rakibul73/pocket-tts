@@ -27,6 +27,33 @@ def increment_steps(
         module.increment_step(model_state[module_name], increment)
 
 
+def trim_states(module: nn.Module, model_state: dict[str, dict[str, torch.Tensor]]):
+    for module_name, module in module.named_modules():
+        if not isinstance(module, StatefulModule):
+            continue
+        module.trim_state(model_state[module_name])
+
+
+def resize_states(
+    module: nn.Module, model_state: dict[str, dict[str, torch.Tensor]], sequence_length: int
+):
+    for module_name, module in module.named_modules():
+        if not isinstance(module, StatefulModule):
+            continue
+        module.resize_state(model_state[module_name], sequence_length)
+
+
+def get_max_step_count(module: nn.Module, model_state: dict[str, dict[str, torch.Tensor]]) -> int:
+    max_steps = 0
+    for module_name, module in module.named_modules():
+        if not isinstance(module, StatefulModule):
+            continue
+        steps = module.get_step_count(model_state[module_name])
+        if steps > max_steps:
+            max_steps = steps
+    return max_steps
+
+
 class StatefulModule(ABC, nn.Module):
     def __init__(self, *args, **kwds):
         self._module_absolute_name = None
@@ -39,6 +66,15 @@ class StatefulModule(ABC, nn.Module):
 
     def increment_step(self, state: dict, increment: int = 1):
         pass
+
+    def trim_state(self, state: dict):
+        pass
+
+    def resize_state(self, state: dict, sequence_length: int):
+        pass
+
+    def get_step_count(self, state: dict) -> int:
+        return 0
 
     def get_state(self, model_state: dict[str, dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         """Get the state for this module from the model state."""

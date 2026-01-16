@@ -79,6 +79,26 @@ class StreamingMultiheadAttention(StatefulModule):
         new_size = state["current_end"].shape[0] + increment
         state["current_end"] = torch.zeros((new_size,)).to(state["current_end"].device)
 
+    def trim_state(self, state: dict):
+        current_len = state["current_end"].shape[0]
+        # We only keep the cache up to current_len
+        # cache shape is (2, batch_size, sequence_length, num_heads, dim_per_head)
+        state["cache"] = state["cache"][:, :, :current_len, :, :].clone()
+
+    def resize_state(self, state: dict, sequence_length: int):
+        cache = state["cache"]
+        current_len = cache.shape[2]
+        if current_len >= sequence_length:
+            return
+
+        # Create new cache with desired size
+        new_shape = list(cache.shape)
+        new_shape[2] = sequence_length
+        new_cache = torch.full(new_shape, float("NaN"), device=cache.device, dtype=cache.dtype)
+        # Copy old data
+        new_cache[:, :, :current_len, :, :] = cache
+        state["cache"] = new_cache
+
     def _complete_kv(self, k, v, state: dict | None):
         k, v = complete_kv(state["cache"], state["current_end"], k, v)
         return k, v

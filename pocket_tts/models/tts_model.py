@@ -29,7 +29,13 @@ from pocket_tts.models.mimi import MimiModel
 from pocket_tts.modules import mimi_transformer
 from pocket_tts.modules.dummy_quantizer import DummyQuantizer
 from pocket_tts.modules.seanet import SEANetDecoder, SEANetEncoder
-from pocket_tts.modules.stateful_module import increment_steps, init_states
+from pocket_tts.modules.stateful_module import (
+    get_max_step_count,
+    increment_steps,
+    init_states,
+    resize_states,
+    trim_states,
+)
 from pocket_tts.utils.config import Config, load_config
 from pocket_tts.utils.utils import (
     PREDEFINED_VOICES,
@@ -488,6 +494,12 @@ class TTSModel(nn.Module):
         max_gen_len = int(gen_len_sec * 12.5)
         prepared = self.flow_lm.conditioner.prepare(text_to_generate)
 
+        # Let's resize the state to the estimated size
+        current_steps = get_max_step_count(self.flow_lm, model_state)
+        estimated_steps = current_steps + prepared.tokens.shape[1] + max_gen_len + 50
+        # Should be enough for most cases
+        resize_states(self.flow_lm, model_state, sequence_length=estimated_steps)
+
         with display_execution_time("Prompting text"):
             self._run_flow_lm_and_increment_step(
                 model_state=model_state, text_tokens=prepared.tokens
@@ -627,11 +639,12 @@ class TTSModel(nn.Module):
                 #     "/projects/huggingface/pocket-tts/embeddings/cosette.safetensors"
                 # )
 
-        model_state = init_states(self.flow_lm, batch_size=1, sequence_length=1000)
+        model_state = init_states(self.flow_lm, batch_size=1, sequence_length=prompt.shape[1] + 1)
 
         with display_execution_time("Prompting audio"):
             self._run_flow_lm_and_increment_step(model_state=model_state, audio_conditioning=prompt)
 
+        trim_states(self.flow_lm, model_state)
         return model_state
 
 
