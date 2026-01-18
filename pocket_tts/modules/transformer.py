@@ -111,6 +111,9 @@ class StreamingMultiheadAttention(StatefulModule):
     def _streaming_offset(self, state: dict | None) -> torch.Tensor | int:
         return state["current_end"].shape[0]
 
+    def get_step_count(self, state: dict) -> int:
+        return state["current_end"].shape[0]
+
     def check_model_state(self, model_state: dict):
         if model_state is None:
             raise ValueError("model_state must be provided")

@@ -87,6 +87,9 @@ class MimiStreamingMultiheadAttention(StatefulModule):
     def increment_step(self, state, increment: int = 1):
         state["offset"] += increment
 
+    def get_step_count(self, state: dict) -> int:
+        return state["offset"][0].item()
+
     def _complete_kv(self, k, v, model_state: dict | None) -> KVCacheResult:
         if model_state is None:
             return KVCacheResult.from_kv(k, v)
